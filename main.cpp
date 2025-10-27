@@ -80,11 +80,12 @@ public:
 
     return true;
   }
+
   static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
       VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType,
       const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData) {
 
-    std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
+    cerr << "validation layer: " << pCallbackData->pMessage << endl;
 
     return VK_FALSE;
   }
@@ -122,8 +123,36 @@ private:
   vector<VkFence> inFlightFences;
 
   uint32_t currentFrame = 0;
+  bool framebufferResized = false;
 
   const vector<const char *> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+
+  void cleanupSwapChain() {
+    for (auto framebuffer : swapChainFramebuffers) {
+      vkDestroyFramebuffer(device, framebuffer, nullptr);
+    }
+
+    for (auto imageView : swapChainImageViews) {
+      vkDestroyImageView(device, imageView, nullptr);
+    }
+
+    vkDestroySwapchainKHR(device, swapChain, nullptr);
+  }
+
+  void recreateSwapChain() {
+    vkDeviceWaitIdle(device);
+
+    cleanupSwapChain();
+
+    createSwapChain();
+    createImageViews();
+    createFramebuffers();
+  }
+
+  static void framebufferResizeCallback(GLFWwindow *window, int width, int height) {
+    auto app = reinterpret_cast<VulkanApplication *>(glfwGetWindowUserPointer(window));
+    app->framebufferResized = true;
+  }
 
   void initWindow() {
     glfwInit();
@@ -131,6 +160,8 @@ private:
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
     window = glfwCreateWindow(width, height, "Intro to Vulkan", nullptr, nullptr);
+    glfwSetWindowUserPointer(window, this); // pass arbistrary pointer
+    glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
   }
   void initVulkan() {
     createInstance();
@@ -147,7 +178,7 @@ private:
 
   void createSurface() {
     if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS) {
-      throw std::runtime_error("failed to create window surface!");
+      throw runtime_error("failed to create window surface!");
     }
   }
 
@@ -238,10 +269,11 @@ private:
     QueueFamilyIndices queueFamilyIndices =
         PhysicalDeviceManager::findSuitableQueueFamiles(physicalDevice, &surface);
 
-    VkCommandPoolCreateInfo poolInfo{};
-    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+    VkCommandPoolCreateInfo poolInfo{
+        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .queueFamilyIndex = queueFamilyIndices.graphicsFamily.value(),
+    };
 
     if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
       throw runtime_error("failed to create command pool!");
@@ -265,7 +297,7 @@ private:
       };
 
       if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create framebuffer!");
+        throw runtime_error("failed to create framebuffer!");
       }
     }
   }
@@ -339,7 +371,7 @@ private:
     VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
 
     // dynamic state
-    std::vector<VkDynamicState> dynamicStates = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    vector<VkDynamicState> dynamicStates = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
 
     VkPipelineDynamicStateCreateInfo dynamicState{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
@@ -461,7 +493,7 @@ private:
                                                                      .baseArrayLayer = 0,
                                                                      .layerCount = 1}};
       if (vkCreateImageView(device, &imageViewCreateInfo, nullptr, &swapChainImageViews[i]) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create image views!");
+        throw runtime_error("failed to create image views!");
       }
     }
   }
@@ -526,15 +558,25 @@ private:
       glfwPollEvents();
       drawFrame();
     }
+
+    vkDeviceWaitIdle(device);
   }
 
   void drawFrame() {
     vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
-    vkResetFences(device, 1, &inFlightFences[currentFrame]);
 
     uint32_t imageIndex;
-    vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame],
-                          VK_NULL_HANDLE, &imageIndex);
+    VkResult result = vkAcquireNextImageKHR(
+        device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+      recreateSwapChain();
+      return;
+    } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+      throw std::runtime_error("failed to acquire swap chain image!");
+    }
+
+    vkResetFences(device, 1, &inFlightFences[currentFrame]);
 
     vkResetCommandBuffer(commandBuffers[currentFrame], 0);
     recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
@@ -569,7 +611,14 @@ private:
     presentInfo.pImageIndices = &imageIndex;
     presentInfo.pResults = nullptr;
 
-    vkQueuePresentKHR(presentQueue, &presentInfo);
+    result = vkQueuePresentKHR(presentQueue, &presentInfo);
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
+      framebufferResized = false;
+      recreateSwapChain();
+    } else if (result != VK_SUCCESS) {
+      throw std::runtime_error("failed to present swap chain image!");
+    }
 
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
   }
@@ -583,22 +632,14 @@ private:
 
     vkDestroyCommandPool(device, commandPool, nullptr);
 
-    for (auto framebuffer : swapChainFramebuffers) {
-      vkDestroyFramebuffer(device, framebuffer, nullptr);
-    }
-
     vkDestroyPipeline(device, graphicsPipeline, nullptr);
     vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
     vkDestroyRenderPass(device, renderPass, nullptr);
 
-    for (auto imageView : swapChainImageViews) {
-      vkDestroyImageView(device, imageView, nullptr);
-    }
-
-    vkDestroySwapchainKHR(device, swapChain, nullptr);
+    cleanupSwapChain();
 
     if (enableValidationLayers) {
-      // DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
+      // vkDestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
     }
 
     vkDestroySurfaceKHR(instance, surface, nullptr);
@@ -634,6 +675,7 @@ private:
   }
 
   void createInstance() {
+
     if (enableValidationLayers && !checkValidationLayerSupport()) {
       throw runtime_error("Validation layers requested!");
     }
@@ -688,8 +730,8 @@ int main() {
 
   try {
     app.run();
-  } catch (const std::exception &e) {
-    std::cerr << e.what() << std::endl;
+  } catch (const exception &e) {
+    cerr << e.what() << endl;
     return EXIT_FAILURE;
   }
 
