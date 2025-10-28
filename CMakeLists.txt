@@ -16,6 +16,18 @@ find_package(glfw3 REQUIRED)
 set(SHADER_SOURCE_DIR ${CMAKE_SOURCE_DIR}/shaders)
 set(SHADER_BINARY_DIR ${CMAKE_BINARY_DIR}/shaders)
 
+# List source files 
+set(SOURCE_FILES 
+	src/main.cpp
+	src/engine/devices.cpp
+	src/engine/frames.cpp
+	src/engine/render_pipeline.cpp
+	src/engine/setup.cpp
+	src/engine/shaders.cpp
+	src/engine/validation.cpp
+	src/engine/vertex.cpp
+)
+
 file(MAKE_DIRECTORY ${SHADER_BINARY_DIR})
 
 add_custom_command(
@@ -37,7 +49,7 @@ add_custom_target(Shaders
 )
 
 # Create executable
-add_executable(VulkanTest main.cpp devices.cpp shaders.cpp)
+add_executable(VulkanTest ${SOURCE_FILES})
 add_dependencies(VulkanTest Shaders)
 
 # Link libraries

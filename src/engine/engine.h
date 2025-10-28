@@ -4,12 +4,44 @@
 #include <vulkan/vulkan_core.h>
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#include <array>
 #include <fstream>
+#include <glm/glm.hpp>
 #include <iostream>
 #include <optional>
 #include <string>
 
 using namespace std;
+
+// shader vertex inputs
+struct Vertex {
+  glm::vec2 pos;
+  glm::vec3 color;
+
+  static VkVertexInputBindingDescription getBindingDescription() {
+    VkVertexInputBindingDescription bindingDescription{
+        .binding = 0, .stride = sizeof(Vertex), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX};
+
+    return bindingDescription;
+  }
+
+  static array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
+    array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+
+    attributeDescriptions[0] = {
+        .location = 0, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, pos)};
+    attributeDescriptions[1].binding = 0;
+    attributeDescriptions[1].location = 1;
+    attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+    attributeDescriptions[1].offset = offsetof(Vertex, color);
+    return attributeDescriptions;
+  }
+};
+const std::vector<Vertex> vertices = {{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+                                      {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+                                      {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+                                      {{-0.7f, 0.2f}, {1.0f, 1.0f, 1.0f}}};
+const std::vector<uint16_t> indices = {0, 1, 2, 2, 3, 0};
 
 const vector<const char *> validationLayers = {"VK_LAYER_KHRONOS_validation"};
 const vector<const char *> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
@@ -39,7 +71,7 @@ class VulkanEngine {
 private:
   bool enableValidationLayers;
 
-  string windowName;
+  const char *windowName;
   int width, height;
   GLFWwindow *window;
   VkInstance instance;
@@ -74,7 +106,11 @@ private:
   uint32_t currentFrame = 0;
 
   int max_inflight_frames;
-  bool frameBufferResized = false;
+
+  VkBuffer vertexBuffer;
+  VkDeviceMemory vertexBufferMemory;
+  VkBuffer indexBuffer;
+  VkDeviceMemory indexBufferMemory;
 
   // physical device management
   QueueFamilyIndices findSuitableQueueFamiles(VkPhysicalDevice device);
@@ -85,6 +121,7 @@ private:
   SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice *device);
   vector<tuple<VkPhysicalDevice, VkPhysicalDeviceProperties, VkPhysicalDeviceFeatures>> getAvailableDevices();
   VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities);
+  uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
   static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
       VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -117,8 +154,14 @@ private:
   void createGraphicsPipeline();
   void createFramebuffers();
   void createCommandPool();
-  void createCommandBuffer();
+  void createVertexBuffer();
+  void createIndexBuffer();
+  void createCommandBuffers();
   void createSyncObjects();
+
+  void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
+                    VkBuffer &buffer, VkDeviceMemory &bufferMemory);
+  void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
   void initVulkan() {
     createInstance();
@@ -129,7 +172,9 @@ private:
     createGraphicsPipeline();
     createFramebuffers();
     createCommandPool();
-    createCommandBuffer();
+    createVertexBuffer();
+    createIndexBuffer();
+    createCommandBuffers();
     createSyncObjects();
   }
 
@@ -149,7 +194,10 @@ private:
   void cleanupSwapChain();
 
 public:
-  VulkanEngine(int width, int height, int max_inflight_frames, bool enableValidationLayers, string windowName)
+  bool frameBufferResized = false;
+
+  VulkanEngine(int width, int height, int max_inflight_frames, bool enableValidationLayers,
+               const char *windowName)
       : width(width), height(height), max_inflight_frames(max_inflight_frames),
         enableValidationLayers(enableValidationLayers), windowName(windowName) {}
   VkShaderModule createShaderModule(const std::vector<char> &code);
@@ -166,6 +214,11 @@ public:
     createSwapChain();
     createImageViews();
     createFramebuffers();
+  }
+
+  static void framebufferResizeCallback(GLFWwindow *window, int width, int height) {
+    auto app = reinterpret_cast<VulkanEngine *>(glfwGetWindowUserPointer(window));
+    app->frameBufferResized = true;
   }
 
   void run() {

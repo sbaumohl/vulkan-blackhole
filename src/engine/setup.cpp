@@ -1,16 +1,14 @@
 #include "engine.h"
 #include <vulkan/vulkan_core.h>
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
 
 void VulkanEngine::initWindow() {
   glfwInit();
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
   glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
-  window = glfwCreateWindow(width, height, "Intro to Vulkan", nullptr, nullptr);
+  window = glfwCreateWindow(width, height, windowName, nullptr, nullptr);
   glfwSetWindowUserPointer(window, this); // pass arbistrary pointer
-  // glfwSetFramebufferSizeCallback(window, framebufferResizeCallback); TODO
+  glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
 }
 
 VkResult CreateDebugUtilsMessengerEXT(VkInstance instance,
@@ -112,7 +110,7 @@ void VulkanEngine::createSwapChain() {
 
   VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
   VkPresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
-  VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities, this->window);
+  VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities);
 
   uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
   if (swapChainSupport.capabilities.maxImageCount > 0)
@@ -218,7 +216,20 @@ void VulkanEngine::createCommandPool() {
   }
 }
 
-void VulkanEngine::createCommandBuffer() {
+uint32_t VulkanEngine::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
+  VkPhysicalDeviceMemoryProperties memProperties;
+  vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
+
+  for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+    if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+      return i;
+    }
+  }
+
+  throw runtime_error("failed to find suitable memory type!");
+}
+
+void VulkanEngine::createCommandBuffers() {
   commandBuffers.resize(max_inflight_frames);
 
   VkCommandBufferAllocateInfo allocInfo{
@@ -276,7 +287,15 @@ void VulkanEngine::cleanup() {
   vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
   vkDestroyRenderPass(device, renderPass, nullptr);
 
+  vkDestroyBuffer(device, vertexBuffer, nullptr);
+
   cleanupSwapChain();
+
+  vkDestroyBuffer(device, indexBuffer, nullptr);
+  vkFreeMemory(device, indexBufferMemory, nullptr);
+
+  vkDestroyBuffer(device, vertexBuffer, nullptr);
+  vkFreeMemory(device, vertexBufferMemory, nullptr);
 
   if (enableValidationLayers) {
     // vkDestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);

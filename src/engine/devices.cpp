@@ -1,14 +1,9 @@
 #include "engine.h"
-#include <cstdint>
-#include <set>
-#include <vulkan/vulkan.h>
-#include <vulkan/vulkan_core.h>
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
 #include <algorithm>
 #include <cstdint>
 #include <limits>
 #include <map>
+#include <set>
 #include <utility>
 
 using namespace std;
