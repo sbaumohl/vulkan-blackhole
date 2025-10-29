@@ -83,5 +83,5 @@ void VulkanEngine::createGeometries() {
   for (int i = 0; i < 10; i++)
     for (int j = 0; j < 10; j++)
       this->geometries.push_back(
-          RigidBody::createSquare((0.1 * i) - 0.5, (0.1 * j) - 0.5, 0.025, {1.0f, 0.25f, 0.1f}, this));
+          RigidBody::createSphere(0.075 * i - 0.5, 0.075 * j - 0.5, 0.05, {0.0f, 0.0f, 1.0f}, this));
 }

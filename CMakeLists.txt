@@ -26,6 +26,7 @@ set(SOURCE_FILES
 	src/engine/shaders.cpp
 	src/engine/validation.cpp
 	src/engine/vertex.cpp
+	src/engine/physics.cpp
 )
 
 file(MAKE_DIRECTORY ${SHADER_BINARY_DIR})
