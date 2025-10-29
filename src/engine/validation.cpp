@@ -1,5 +1,6 @@
 #include "cstring"
 #include "engine.h"
+using namespace std;
 
 bool VulkanEngine::checkValidationLayerSupport() {
   uint32_t layerCount;

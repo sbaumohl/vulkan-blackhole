@@ -1,5 +1,24 @@
 #include "engine.h"
 #include <vulkan/vulkan_core.h>
+using namespace std;
+
+void VulkanEngine::initVulkan() {
+  createInstance();
+  setupDebugMessenger();
+  createSwapChain();
+  createImageViews();
+  createRenderPass();
+  createGraphicsPipeline();
+  createFramebuffers();
+  createCommandPool();
+  initializeTransferBuffer();
+  createGeometries();
+  for (RigidBody &body : this->geometries)
+    body.loadToGpu();
+
+  createCommandBuffers();
+  createSyncObjects();
+}
 
 void VulkanEngine::initWindow() {
   glfwInit();
@@ -216,9 +235,10 @@ void VulkanEngine::createCommandPool() {
   }
 }
 
-uint32_t VulkanEngine::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
+uint32_t findMemoryType(VkPhysicalDevice *physicalDevice, uint32_t typeFilter,
+                        VkMemoryPropertyFlags properties) {
   VkPhysicalDeviceMemoryProperties memProperties;
-  vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
+  vkGetPhysicalDeviceMemoryProperties(*physicalDevice, &memProperties);
 
   for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
     if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
@@ -287,19 +307,13 @@ void VulkanEngine::cleanup() {
   vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
   vkDestroyRenderPass(device, renderPass, nullptr);
 
-  vkDestroyBuffer(device, vertexBuffer, nullptr);
-
   cleanupSwapChain();
-
-  vkDestroyBuffer(device, indexBuffer, nullptr);
-  vkFreeMemory(device, indexBufferMemory, nullptr);
-
-  vkDestroyBuffer(device, vertexBuffer, nullptr);
-  vkFreeMemory(device, vertexBufferMemory, nullptr);
 
   if (enableValidationLayers) {
     // vkDestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
   }
+
+  vkFreeCommandBuffers(device, commandPool, 1, &transferCommandBuffer);
 
   vkDestroySurfaceKHR(instance, surface, nullptr);
 
