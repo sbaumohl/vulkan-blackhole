@@ -3,6 +3,7 @@
 using namespace std;
 
 void VulkanEngine::initVulkan() {
+  cout << "C++ VERSION " << __cplusplus << endl;
   createInstance();
   setupDebugMessenger();
   createSwapChain();
@@ -13,8 +14,6 @@ void VulkanEngine::initVulkan() {
   createCommandPool();
   initializeTransferBuffer();
   createGeometries();
-  for (RigidBody &body : this->geometries)
-    body.loadToGpu();
 
   createCommandBuffers();
   createSyncObjects();

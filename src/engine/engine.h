@@ -2,6 +2,8 @@
 #include <cmath>
 #include <cstdint>
 #include <glm/detail/qualifier.hpp>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
@@ -18,6 +20,23 @@
 
 const float PI = 3.141592653;
 struct RigidBody;
+class VulkanEngine;
+
+class RigidBodyManager {
+private:
+  VulkanEngine *engine;
+
+  std::pair<VkDeviceSize, VkDeviceSize> getSizes();
+  void calculateOffsets();
+
+public:
+  VkBuffer vertexBuffer, indexBuffer;
+  VkDeviceMemory vertexMemory, indexMemory;
+  std::unordered_map<std::string, RigidBody> geometries;
+  RigidBodyManager(VulkanEngine *engine);
+  ~RigidBodyManager();
+  void loadToGpu();
+};
 
 void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
                   VkBuffer &buffer, VkDeviceMemory &bufferMemory, VkDeviceSize offset, VkDevice *device,
@@ -115,7 +134,7 @@ private:
   int max_inflight_frames;
 
   // transfer command buffer bulk queueing
-  std::vector<RigidBody> geometries;
+  RigidBodyManager rigidBodyManager;
   VkCommandBuffer transferCommandBuffer;
 
   // physical device management
@@ -191,7 +210,8 @@ public:
   VulkanEngine(int width, int height, int max_inflight_frames, bool enableValidationLayers,
                const char *windowName)
       : width(width), height(height), max_inflight_frames(max_inflight_frames),
-        enableValidationLayers(enableValidationLayers), windowName(windowName) {}
+        enableValidationLayers(enableValidationLayers), windowName(windowName),
+        rigidBodyManager(RigidBodyManager(this)) {}
   VkShaderModule createShaderModule(const std::vector<char> &code);
   bool checkValidationLayerSupport();
   std::vector<const char *> getRequiredExtensions();
@@ -233,22 +253,12 @@ VkShaderModule createShaderModule(const std::vector<char> &code, VkDevice *devic
 struct RigidBody {
   std::vector<Vertex> vertices;
   std::vector<uint32_t> indices;
-  VulkanEngine *engine;
 
-  VkBuffer vertexBuffer, indexBuffer;
-  VkDeviceMemory vertexMemory, indexMemory;
+  VkDeviceSize indexOffset, vertexOffset;
 
-  void loadVertices();
-  void loadIndices();
-  void loadToGpu();
-  void cleanup();
+  VkDeviceSize getVertSize() { return sizeof(Vertex) * vertices.size(); }
+  VkDeviceSize getIndexSize() { return sizeof(uint32_t) * indices.size(); }
 
-  static RigidBody createSphere(float x, float y, float r, glm::vec3 color, VulkanEngine *engine);
-  static RigidBody createSquare(float x, float y, float half_length, glm::vec3 color, VulkanEngine *engine);
-};
-
-class RigidBodyManager {
-private:
-public:
-  RigidBodyManager() {}
+  static RigidBody createSphere(float x, float y, float r, glm::vec3 color);
+  static RigidBody createSquare(float x, float y, float half_length, glm::vec3 color);
 };

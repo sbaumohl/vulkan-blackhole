@@ -1,4 +1,8 @@
 #include "engine.h"
+#include <format>
+#include <iostream>
+#include <string>
+
 #include <vulkan/vulkan_core.h>
 
 using namespace std;
@@ -82,6 +86,9 @@ void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyF
 void VulkanEngine::createGeometries() {
   for (int i = 0; i < 10; i++)
     for (int j = 0; j < 10; j++)
-      this->geometries.push_back(
-          RigidBody::createSphere(0.075 * i - 0.5, 0.075 * j - 0.5, 0.05, {0.0f, 0.0f, 1.0f}, this));
+      this->rigidBodyManager.geometries.insert(
+          {std::format("N {} {}", i, j),
+           RigidBody::createSphere(0.075 * i - 0.5, 0.075 * j - 0.5, 0.05, {0.0f, 0.0f, 1.0f})});
+
+  this->rigidBodyManager.loadToGpu();
 }

@@ -103,12 +103,10 @@ void VulkanEngine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t i
   scissor.extent = swapChainExtent;
   vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-  VkDeviceSize offsets[] = {0};
-  for (RigidBody &body : this->geometries) {
-    VkBuffer vertexBuffers[] = {body.vertexBuffer};
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-    vkCmdBindIndexBuffer(commandBuffer, body.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-    vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(body.indices.size()), 1, 0, 0, 0);
+  for (auto const &[k, v] : this->rigidBodyManager.geometries) {
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, &rigidBodyManager.vertexBuffer, &v.vertexOffset);
+    vkCmdBindIndexBuffer(commandBuffer, rigidBodyManager.indexBuffer, v.indexOffset, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(v.indices.size()), 1, 0, 0, 0);
   }
 
   vkCmdEndRenderPass(commandBuffer);
